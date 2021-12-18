@@ -1,3 +1,4 @@
+import UtilClasses.ClientDetails;
 import javafx.application.Application;
 import javafx.stage.Stage;
 
@@ -5,10 +6,13 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 public class Server extends Application {
     private static List<TaskClientConnection> connectionList = new ArrayList<TaskClientConnection>();
+    public HashMap<String, ClientDetails> onlineClients=new HashMap<String,ClientDetails>();
+
     public static void main(String[] args) {
         launch(args);
     }

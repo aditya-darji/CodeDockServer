@@ -1,7 +1,4 @@
-import UtilClasses.LoginInfo;
-import UtilClasses.PasswordUtils;
-import UtilClasses.SignupInfo;
-import UtilClasses.UseridInfo;
+import UtilClasses.*;
 import com.sun.org.apache.xpath.internal.operations.Bool;
 
 import java.io.IOException;
@@ -16,6 +13,7 @@ public class TaskClientConnection implements Runnable{
     Socket socket;
     Server server;
     Conn conn = new Conn();
+    ClientDetails clientDetails = null;
 
     public TaskClientConnection(Socket socket, Server server) throws SQLException, ClassNotFoundException {
         this.socket = socket;
@@ -41,6 +39,8 @@ public class TaskClientConnection implements Runnable{
                     case 2:
                         LoginInfo loginInfo = (LoginInfo) oi.readObject();
                         UseridInfo useridInfo = LoginEncrypted(loginInfo);
+                        clientDetails = new ClientDetails(socket, useridInfo);
+                        server.onlineClients.put(useridInfo.getUsername(), clientDetails);
                         os.writeObject(useridInfo);
                         os.flush();
                         break;
@@ -50,12 +50,26 @@ public class TaskClientConnection implements Runnable{
                         os.writeInt(b);
                         os.flush();
                         break;
+                    case 4:
+                        String sendTo = oi.readUTF();
+                        String messageToSend = oi.readUTF();
+                        if(server.onlineClients.containsKey(sendTo)){
+                            ClientDetails sendToClient = server.onlineClients.get(sendTo);
+                            ObjectOutputStream sendToOO = new ObjectOutputStream(sendToClient.getSocket().getOutputStream());
+                            sendToOO.writeUTF("[" + clientDetails.getUsername() + "]: " + messageToSend + "");
+                            sendToOO.flush();
+                        }
+                        os.writeUTF("SERVER-REPLY");
+                        os.flush();
+                        break;
                     default:
                         break;
                 }
 
-            } catch (IOException | ClassNotFoundException e) {}
+            } catch (IOException | ClassNotFoundException e) { e.printStackTrace();}
         }
+
+        server.onlineClients.remove(clientDetails.getUsername());
     }
 
     private UseridInfo LoginEncrypted(LoginInfo loginInfo) {
