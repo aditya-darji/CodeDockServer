@@ -4,6 +4,7 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import sun.rmi.runtime.NewThreadAction;
 
+import javax.print.Doc;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -86,6 +87,11 @@ public class TaskClientConnection implements Runnable{
                             os.flush();
                         }
                         break;
+                    case 7:
+                        ArrayList<DocumentDetails> documentsList = getAllDocuments();
+                        os.writeObject(documentsList);
+                        os.flush();
+                        break;
                     default:
                         break;
                 }
@@ -94,6 +100,24 @@ public class TaskClientConnection implements Runnable{
         }
 
         server.onlineClients.remove(clientDetails.getUsername());
+    }
+
+    private ArrayList<DocumentDetails> getAllDocuments() {
+        ArrayList<DocumentDetails> resultArray = new ArrayList<DocumentDetails>();
+        try{
+            PreparedStatement stmt = conn.c.prepareStatement("SELECT room.room_id AS `room_id`, room.file_name AS `file_name`, room.file_extension AS `file_extension`, room.file_content AS `file_content`, room.created_at AS `created_at`, room.creator_id AS `creator_id`, room_details.access AS `access` FROM `room` INNER JOIN room_details ON room.room_id=room_details.room_id WHERE room_details.user_id=? ORDER BY `created_at` DESC");
+            stmt.setInt(1, clientDetails.getUserId());
+
+            ResultSet rs = stmt.executeQuery();
+            while(rs.next()){
+//                System.out.println(rs.getInt("user_id") + "-" + rs.getString("name") + "-" + rs.getString("user_name"));
+                DocumentDetails documentDetails = new DocumentDetails(rs.getInt("room_id"), rs.getInt("creator_id"), rs.getInt("access"), rs.getString("file_name"), rs.getString("file_extension"), rs.getString("file_content"), rs.getTimestamp("created_at"));
+                resultArray.add(documentDetails);
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+        return resultArray;
     }
 
     private void createNewRoom(NewDocumentInfo newDocumentInfo) throws SQLException {
@@ -119,7 +143,10 @@ public class TaskClientConnection implements Runnable{
             System.out.println(room_id);
             StringBuilder placeholders = new StringBuilder();
             PreparedStatement stmt2 = conn.c.prepareStatement("INSERT INTO room_details(room_id, user_id, access) VALUES(?,?,?)");
-
+            stmt2.setInt(1, room_id);
+            stmt2.setInt(2, clientDetails.getUserId());
+            stmt2.setInt(3, 0);
+            stmt2.addBatch();
             for(Map.Entry mapElement: newDocumentInfo.getCollaboratorMap().entrySet()){
                 Integer key = (Integer) mapElement.getKey();
                 Integer value = (Integer) mapElement.getValue();
@@ -169,27 +196,30 @@ public class TaskClientConnection implements Runnable{
 
     private UseridInfo LoginEncrypted(LoginInfo loginInfo) {
         UseridInfo useridInfo = new UseridInfo(0, "", "", "");
-        try{
-            PreparedStatement stmt = conn.c.prepareStatement("SELECT * FROM user WHERE `user_name`=?");
-            stmt.setString(1, loginInfo.getUsername());
-            ResultSet rs = stmt.executeQuery();
+        if(!server.onlineClients.containsKey(loginInfo.getUsername())) {
+            try{
+                PreparedStatement stmt = conn.c.prepareStatement("SELECT * FROM user WHERE `user_name`=?");
+                stmt.setString(1, loginInfo.getUsername());
+                ResultSet rs = stmt.executeQuery();
 
-            if(rs.next()){
-                String providedPassword = loginInfo.getPassword();
-                String hash = rs.getString("hash");
-                String salt = rs.getString("salt");
+                if(rs.next()){
+                    String providedPassword = loginInfo.getPassword();
+                    String hash = rs.getString("hash");
+                    String salt = rs.getString("salt");
 
-                boolean passwordMatch = PasswordUtils.verifyUserPassword(providedPassword.toCharArray(), hash, salt);
-                if(passwordMatch){
-                    useridInfo.setUserid(rs.getInt("user_id"));
-                    useridInfo.setUsername(rs.getString("user_name"));
-                    useridInfo.setName(rs.getString("name"));
-                    useridInfo.setEmail(rs.getString("email"));
+                    boolean passwordMatch = PasswordUtils.verifyUserPassword(providedPassword.toCharArray(), hash, salt);
+                    if(passwordMatch){
+                        useridInfo.setUserid(rs.getInt("user_id"));
+                        useridInfo.setUsername(rs.getString("user_name"));
+                        useridInfo.setName(rs.getString("name"));
+                        useridInfo.setEmail(rs.getString("email"));
+                    }
                 }
+            } catch (SQLException e) {
+                e.printStackTrace();
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
+
         return useridInfo;
     }
 
