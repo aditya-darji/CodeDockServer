@@ -1,13 +1,20 @@
 import UtilClasses.*;
 import com.sun.org.apache.xpath.internal.operations.Bool;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import sun.rmi.runtime.NewThreadAction;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
+import java.sql.Date;
+import java.util.*;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.Map;
 
 public class TaskClientConnection implements Runnable{
     Socket socket;
@@ -51,25 +58,113 @@ public class TaskClientConnection implements Runnable{
                         os.flush();
                         break;
                     case 4:
+                        ArrayList<String> usersList = getAllUsers();
+                        os.writeObject(usersList);
+                        os.flush();
+                        break;
+                    case 5:
+                        NewDocumentInfo newDocumentInfo = (NewDocumentInfo) oi.readObject();
+                        createNewRoom(newDocumentInfo);
+                        os.writeUTF("ROOM-CREATED");
+                        os.flush();
+                        break;
+                    case 6:
                         String sendTo = oi.readUTF();
                         String messageToSend = oi.readUTF();
-                        if(server.onlineClients.containsKey(sendTo)){
-                            ClientDetails sendToClient = server.onlineClients.get(sendTo);
-                            ObjectOutputStream sendToOO = new ObjectOutputStream(sendToClient.getSocket().getOutputStream());
-                            sendToOO.writeUTF("[" + clientDetails.getUsername() + "]: " + messageToSend + "");
-                            sendToOO.flush();
+                        if(sendTo.equals("STOP-THREAD")){
+                            os.writeUTF(sendTo);
+                            os.flush();
                         }
-                        os.writeUTF("SERVER-REPLY");
-                        os.flush();
+                        else{
+                            if(server.onlineClients.containsKey(sendTo)){
+                                ClientDetails sendToClient = server.onlineClients.get(sendTo);
+                                ObjectOutputStream sendToOO = new ObjectOutputStream(sendToClient.getSocket().getOutputStream());
+                                sendToOO.writeUTF("[" + clientDetails.getUsername() + "]: " + messageToSend + "");
+                                sendToOO.flush();
+                            }
+                            os.writeUTF("SERVER-REPLY");
+                            os.flush();
+                        }
                         break;
                     default:
                         break;
                 }
 
-            } catch (IOException | ClassNotFoundException e) { e.printStackTrace();}
+            } catch (IOException | ClassNotFoundException | SQLException e) { e.printStackTrace();}
         }
 
         server.onlineClients.remove(clientDetails.getUsername());
+    }
+
+    private void createNewRoom(NewDocumentInfo newDocumentInfo) throws SQLException {
+        try{
+            PreparedStatement pstmt = conn.c.prepareStatement("SELECT MAX(room_id) AS maxRoom FROM room");
+            ResultSet rs0 = pstmt.executeQuery();
+            int maxRoomId = 0;
+            if(rs0.next()){
+                maxRoomId = rs0.getInt("maxRoom");
+            }
+            int room_id = maxRoomId+1;
+            Timestamp timestamp = new Timestamp(System.currentTimeMillis());
+            PreparedStatement stmt = conn.c.prepareStatement("INSERT INTO room(`room_id`, `file_name`, `file_extension`, `file_content`, `created_at`, `creator_id`) VALUES(?,?,?,?,?,?)");
+            stmt.setInt(1, room_id);
+            stmt.setString(2, newDocumentInfo.getDocumentName());
+            stmt.setString(3, newDocumentInfo.getDocumentExtension());
+            stmt.setString(4, newDocumentInfo.getDocumentContent());
+            stmt.setTimestamp(5, timestamp);
+            stmt.setInt(6, clientDetails.getUserId());
+
+            stmt.executeUpdate();
+
+            System.out.println(room_id);
+            StringBuilder placeholders = new StringBuilder();
+            PreparedStatement stmt2 = conn.c.prepareStatement("INSERT INTO room_details(room_id, user_id, access) VALUES(?,?,?)");
+
+            for(Map.Entry mapElement: newDocumentInfo.getCollaboratorMap().entrySet()){
+                Integer key = (Integer) mapElement.getKey();
+                Integer value = (Integer) mapElement.getValue();
+                stmt2.setInt(1, room_id);
+                stmt2.setInt(2, key);
+                stmt2.setInt(3, value);
+                stmt2.addBatch();
+            }
+
+            int[] updateCounts = stmt2.executeBatch();
+
+//                for(Map.Entry mapElement: newDocumentInfo.getCollaboratorMap().entrySet()){
+//                    placeholders.append("(?,?,?),");
+////                    Integer key = (Integer) mapElement.getKey();
+////                    Integer value = (Integer) mapElement.getValue();
+//                }
+//                sql.append(placeholders);
+//
+//                PreparedStatement stmt2 = conn.c.prepareStatement(sql.toString());
+//                for(Map.Entry mapElement: newDocumentInfo.getCollaboratorMap().entrySet()){
+//                    Integer key = (Integer) mapElement.getKey();
+//                    Integer value = (Integer) mapElement.getValue();
+//                    stmt2.()
+//                }
+
+
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+    }
+
+    private ArrayList<String> getAllUsers() {
+        ArrayList<String> resultArray = new ArrayList<String>();
+        try{
+            PreparedStatement stmt = conn.c.prepareStatement("SELECT `user_id`, `name`, `user_name` FROM user");
+            ResultSet rs = stmt.executeQuery();
+            while(rs.next()){
+//                System.out.println(rs.getInt("user_id") + "-" + rs.getString("name") + "-" + rs.getString("user_name"));
+                if(rs.getInt("user_id") == clientDetails.getUserId()) continue;
+                resultArray.add(rs.getInt("user_id") + "-" + rs.getString("name") + "-" + rs.getString("user_name"));
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+        return resultArray;
     }
 
     private UseridInfo LoginEncrypted(LoginInfo loginInfo) {
