@@ -74,7 +74,6 @@ public class TaskClientConnection implements Runnable{
                         String messageToSend = oi.readUTF();
                         if(sendTo.equals("STOP-THREAD")){
                             os.writeUTF(sendTo);
-                            os.flush();
                         }
                         else{
                             if(server.onlineClients.containsKey(sendTo)){
@@ -84,15 +83,51 @@ public class TaskClientConnection implements Runnable{
                                 sendToOO.flush();
                             }
                             os.writeUTF("SERVER-REPLY");
-                            os.flush();
                         }
+                        os.flush();
                         break;
                     case 7:
                         ArrayList<DocumentDetails> documentsList = getAllDocuments();
                         os.writeObject(documentsList);
                         os.flush();
                         break;
+                    case 8:
+                        String personalSendTo = oi.readUTF();
+                        String personalMessageToSend = oi.readUTF();
+                        os.writeInt(2);
+                        if(server.onlineClients.containsKey(personalSendTo)){
+                            ClientDetails personalSendToClient = server.onlineClients.get(personalSendTo);
+                            ObjectOutputStream personalSendToOO = new ObjectOutputStream(personalSendToClient.getSocket().getOutputStream());
+                            personalSendToOO.writeInt(1);
+                            personalSendToOO.writeUTF("[" + clientDetails.getUsername() + "]: " + personalMessageToSend + "");
+                            personalSendToOO.flush();
+                            os.writeUTF("MESSAGE_SENT");
+                        }
+                        else{
+                            os.writeUTF("Message not sent as receiver is offline.");
+                        }
+                        os.flush();
+                        break;
+                    case 9:
+                        os.writeInt(1000);
+                        os.flush();
+                        break;
+                    case 10:
+                        int chatRoomId = oi.readInt();
+                        String roomMessage = oi.readUTF();
+                        os.writeInt(2);
+                        if(sendMessageInRoom(chatRoomId, roomMessage)){
+                            os.writeUTF("MESSAGE_SENT");
+                        }
+                        else{
+                            os.writeUTF("MESSAGE_NOT_SENT");
+                        }
+                        os.flush();
+                        break;
                     default:
+                        String s = oi.readUTF();
+                        System.out.println(socket);
+                        System.out.println(s);
                         break;
                 }
 
@@ -100,6 +135,32 @@ public class TaskClientConnection implements Runnable{
         }
 
         server.onlineClients.remove(clientDetails.getUsername());
+    }
+
+    private boolean sendMessageInRoom(int chatRoomId, String roomMessage) {
+        try{
+            PreparedStatement stmt = conn.c.prepareStatement("SELECT user.user_name AS `user_name` FROM user INNER JOIN room_details ON user.user_id=room_details.user_id WHERE room_details.room_id=?");
+            stmt.setInt(1, chatRoomId);
+
+            ResultSet rs = stmt.executeQuery();
+
+            while(rs.next()){
+                String receiverUsername = rs.getString("user_name");
+//                System.out.println(receiverUsername);
+                if(receiverUsername.equals(clientDetails.getUsername())) continue;
+                if(server.onlineClients.containsKey(receiverUsername)){
+                    ClientDetails roomSendToClient = server.onlineClients.get(receiverUsername);
+                    ObjectOutputStream sendToOO = new ObjectOutputStream(roomSendToClient.getSocket().getOutputStream());
+                    sendToOO.writeInt(3);
+                    sendToOO.writeUTF("[" + clientDetails.getUsername() + "]: " + roomMessage + "");
+                    sendToOO.flush();
+                }
+            }
+            return true;
+        } catch (SQLException | IOException throwables) {
+            throwables.printStackTrace();
+        }
+        return false;
     }
 
     private ArrayList<DocumentDetails> getAllDocuments() {
