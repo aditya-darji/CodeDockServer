@@ -1,20 +1,11 @@
 import UtilClasses.*;
-import com.sun.org.apache.xpath.internal.operations.Bool;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
-import sun.rmi.runtime.NewThreadAction;
 
-import javax.print.Doc;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.sql.*;
-import java.sql.Date;
-import java.util.*;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.Map;
 
 public class TaskClientConnection implements Runnable{
@@ -124,6 +115,29 @@ public class TaskClientConnection implements Runnable{
                         }
                         os.flush();
                         break;
+                    case 11:
+                        int roomId1 = oi.readInt();
+                        ArrayList<UserAccessInfo> userAccessInfoArrayList = getRoomDetails(roomId1);
+                        ArrayList<String> usersList1 = getAllUsers();
+                        os.writeInt(4);
+                        os.writeObject(userAccessInfoArrayList);
+                        os.writeObject(usersList1);
+                        os.flush();
+                        break;
+                    case 12:
+                        int roomId2 = oi.readInt();
+                        ArrayList<UserAccessInfo> userAccessInfoArrayList1 = (ArrayList<UserAccessInfo>) oi.readObject();
+                        updateUserAccess(roomId2, userAccessInfoArrayList1);
+                        os.writeInt(2);
+                        os.writeUTF("ACCESS_UPDATED");
+                        os.flush();
+                        break;
+                    case 13:
+                        ArrayList<String> usersList2 = getAllUsers();
+                        os.writeInt(5);
+                        os.writeObject(usersList2);
+                        os.flush();
+                        break;
                     default:
                         String s = oi.readUTF();
                         System.out.println(socket);
@@ -135,6 +149,50 @@ public class TaskClientConnection implements Runnable{
         }
 
         server.onlineClients.remove(clientDetails.getUsername());
+    }
+
+    private void updateUserAccess(int roomId2, ArrayList<UserAccessInfo> userAccessInfoArrayList1) {
+        try{
+            PreparedStatement stmt = conn.c.prepareStatement("DELETE FROM room_details WHERE room_id=?");
+            stmt.setInt(1, roomId2);
+            stmt.executeUpdate();
+
+            PreparedStatement stmt2 = conn.c.prepareStatement("INSERT INTO room_details(room_id, user_id, access) VALUES(?,?,?)");
+            stmt2.setInt(1, roomId2);
+            stmt2.setInt(2, clientDetails.getUserId());
+            stmt2.setInt(3, 0);
+            stmt2.addBatch();
+            for (UserAccessInfo userAccessInfo : userAccessInfoArrayList1) {
+                stmt2.setInt(1, roomId2);
+                stmt2.setInt(2, userAccessInfo.getUserId());
+                stmt2.setInt(3, userAccessInfo.getAccess());
+                stmt2.addBatch();
+            }
+
+            int[] updateCounts = stmt2.executeBatch();
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+    }
+
+    private ArrayList<UserAccessInfo> getRoomDetails(int roomId) {
+        ArrayList<UserAccessInfo> userAccessInfoArrayList = new ArrayList<UserAccessInfo>();
+
+        try{
+            PreparedStatement stmt = conn.c.prepareStatement("SELECT user.user_id user_id, user.user_name user_name, room_details.access access FROM user INNER JOIN room_details ON user.user_id=room_details.user_id WHERE room_details.room_id=?");
+            stmt.setInt(1, roomId);
+
+            ResultSet rs = stmt.executeQuery();
+
+            while(rs.next()){
+                if(rs.getInt(1) == clientDetails.getUserId()) continue;
+                UserAccessInfo userAccessInfo = new UserAccessInfo(rs.getInt(1), rs.getString(2), rs.getInt(3));
+                userAccessInfoArrayList.add(userAccessInfo);
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+        return userAccessInfoArrayList;
     }
 
     private boolean sendMessageInRoom(int chatRoomId, String roomMessage) {
@@ -208,9 +266,9 @@ public class TaskClientConnection implements Runnable{
             stmt2.setInt(2, clientDetails.getUserId());
             stmt2.setInt(3, 0);
             stmt2.addBatch();
-            for(Map.Entry mapElement: newDocumentInfo.getCollaboratorMap().entrySet()){
-                Integer key = (Integer) mapElement.getKey();
-                Integer value = (Integer) mapElement.getValue();
+            for(Map.Entry<Integer, Integer> mapElement: newDocumentInfo.getCollaboratorMap().entrySet()){
+                Integer key = mapElement.getKey();
+                Integer value = mapElement.getValue();
                 stmt2.setInt(1, room_id);
                 stmt2.setInt(2, key);
                 stmt2.setInt(3, value);
