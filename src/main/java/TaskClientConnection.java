@@ -1,8 +1,6 @@
 import UtilClasses.*;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.net.Socket;
 import java.sql.*;
 import java.util.ArrayList;
@@ -189,6 +187,17 @@ public class TaskClientConnection implements Runnable{
                         os.writeUTF("ROOM_CONTENT_SAVED");
                         os.flush();
                         break;
+                    case 18:
+                        int roomId8 = oi.readInt();
+                        String documentName = oi.readUTF();
+                        String documentContent = oi.readUTF();
+                        String documentExtension = oi.readUTF();
+                        String inputData = oi.readUTF();
+                        String outputData = compileDocument(roomId8, documentName, documentContent, documentExtension, inputData);
+                        os.writeInt(9);
+                        os.writeUTF(outputData);
+                        os.flush();
+                        break;
                     default:
                         String s = oi.readUTF();
                         System.out.println(socket);
@@ -196,10 +205,126 @@ public class TaskClientConnection implements Runnable{
                         break;
                 }
 
-            } catch (IOException | ClassNotFoundException | SQLException e) { e.printStackTrace();}
+            } catch (IOException | ClassNotFoundException | SQLException | InterruptedException e) { e.printStackTrace();}
         }
 
         server.onlineClients.remove(clientDetails.getUsername());
+    }
+
+    private String compileDocument(int roomId8, String documentName, String documentContent, String documentExtension, String inputData) throws IOException, InterruptedException {
+        String outputData = null;
+        String filePath = roomId8 + "_" + documentName + "." + documentExtension;
+        File file = new File(filePath);
+        BufferedWriter bf = new BufferedWriter(new FileWriter(new File( "." + "\\" + filePath)));
+        bf.write(documentContent);
+        bf.flush();
+        bf.close();
+
+        String inputFilePath = roomId8 + "_" + documentName + "_INPUT" + ".txt";
+        File file1 = new File(inputFilePath);
+        BufferedWriter bf1 = new BufferedWriter(new FileWriter(new File("." + "\\" + inputFilePath)));
+        bf1.write(inputData);
+        bf1.flush();
+        bf1.close();
+
+        String outputFilePath = roomId8 + "_" + documentName + "_OUTPUT" + ".txt";
+        File file2 = new File("." + "\\" + outputFilePath);
+
+        String exeName = roomId8 + "_" + documentName;
+        File dir = new File(".");
+        ProcessBuilder builder = null;
+        try{
+            switch (documentExtension) {
+                case "c": {
+                    Process p = Runtime.getRuntime().exec("cmd /C gcc " + filePath + " -o " + exeName, null, dir);
+                    if(p.getErrorStream().read() != -1){
+                        return printToOutputFile(p.getErrorStream(), "." + "\\" + outputFilePath);
+                    }
+                    if(p.exitValue() != 0) return outputData;
+                    builder = new ProcessBuilder("." + "\\" + exeName + ".exe");
+                    break;
+                }
+                case "cpp": {
+                    Process p = Runtime.getRuntime().exec("cmd /C g++ " + filePath + " -o " + exeName, null, dir);
+                    if(p.getErrorStream().read() != -1){
+                        return printToOutputFile(p.getErrorStream(), "." + "\\" + outputFilePath);
+                    }
+                    if(p.exitValue() != 0) return outputData;
+                    builder = new ProcessBuilder("." + "\\" + exeName + ".exe");
+                    break;
+                }
+                case "java":
+                    String[] command = {"javac", "." + "\\" + filePath};
+                    ProcessBuilder processBuilder = new ProcessBuilder(command);
+                    Process process = processBuilder.start();
+                    if( process.getErrorStream().read() != -1 ){
+                        return printToOutputFile(process.getErrorStream(), "." + "\\" + outputFilePath);
+                    }
+                    if(process.exitValue() != 0) return outputData;
+                    builder = new ProcessBuilder("java","-cp",".",documentName);
+                    break;
+                default:
+                    builder = new ProcessBuilder("python", dir + "\\" + filePath);
+                    break;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        builder.redirectInput(new File("." + "\\" + inputFilePath)).redirectOutput(new File("." + "\\" + outputFilePath));
+        Process process = builder.start();
+
+        if( process.getErrorStream().read() != -1 ){
+            printToOutputFile(process.getErrorStream(), "." + "\\" + outputFilePath);
+        }
+
+        int exitCode = process.waitFor();
+        System.out.println("EXIT CODE: " + exitCode);
+
+        FileReader reader = new FileReader("." + "\\" + outputFilePath);
+        BufferedReader br = new BufferedReader(reader);
+
+        String line;
+        StringBuilder totalFile = new StringBuilder();
+        while ((line = br.readLine()) != null) {
+            totalFile.append(line);
+            totalFile.append("\n");
+        }
+
+        File file4 = new File("." + "\\" + filePath);
+        file4.delete();
+
+        File file5 = new File("." + "\\" + inputFilePath);
+        file5.delete();
+
+        File file6 = new File("." + "\\" + outputFilePath);
+        file6.delete();
+
+//        File file3;
+//        switch (documentExtension){
+//            case "c":
+//            case "cpp":
+//                file3 = new File("." + "\\" + exeName + ".exe");
+//                break;
+//            case "java":
+//                file3 = new File("." + "\\" + exeName + ".exe");
+//                break;
+//        }
+
+        return totalFile.toString();
+    }
+
+    private String printToOutputFile(InputStream input, String outputFilePath) throws IOException {
+        FileReader reader = new FileReader(outputFilePath);
+        BufferedReader br = new BufferedReader(new InputStreamReader(input));
+
+        String line;
+        StringBuilder totalFile = new StringBuilder();
+        while ((line = br.readLine()) != null) {
+            totalFile.append(line);
+            totalFile.append("\n");
+        }
+        return totalFile.toString();
     }
 
     private void saveRoomContent(int roomId7, String roomContent2) throws SQLException {
