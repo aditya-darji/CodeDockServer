@@ -6,6 +6,7 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Map;
 
 public class TaskClientConnection implements Runnable{
@@ -100,6 +101,8 @@ public class TaskClientConnection implements Runnable{
                         os.flush();
                         break;
                     case 9:
+                        int roomId5 = oi.readInt();
+                        server.roomDetailsMap.get(roomId5).remove(clientDetails.getUserId());
                         os.writeInt(1000);
                         os.flush();
                         break;
@@ -138,6 +141,54 @@ public class TaskClientConnection implements Runnable{
                         os.writeObject(usersList2);
                         os.flush();
                         break;
+                    case 14:
+                        int roomId3 = oi.readInt();
+                        int caretPosition = oi.readInt();
+                        updateCaretPosition(roomId3, caretPosition);
+                        os.writeInt(2);
+                        os.writeUTF("CARET_UPDATED");
+                        os.flush();
+                        break;
+                    case 15:
+                        int roomId4 = oi.readInt();
+                        RoomUser roomUser = new RoomUser(clientDetails.getUserId(), clientDetails.getUsername());
+                        if(server.roomDetailsMap.containsKey(roomId4)){
+                            server.roomDetailsMap.get(roomId4).put(clientDetails.getUserId(), roomUser);
+                        }
+                        else{
+                            HashMap<Integer, RoomUser> roomUserHashMap = new HashMap<Integer, RoomUser>();
+                            roomUserHashMap.put(clientDetails.getUserId(), roomUser);
+                            server.roomDetailsMap.put(roomId4, roomUserHashMap);
+                        }
+
+                        String roomContent = null;
+                        if(!server.roomContentHashMap.containsKey(roomId4)){
+                            roomContent = getRoomContent(roomId4);
+                        }
+                        else{
+                            roomContent = server.roomContentHashMap.get(roomId4);
+                        }
+                        os.writeInt(7);
+                        os.writeObject(server.roomDetailsMap.get(roomId4));
+                        os.writeUTF(roomContent);
+                        os.flush();
+                        break;
+                    case 16:
+                        int roomId6 = oi.readInt();
+                        String roomContent1 = oi.readUTF();
+                        updateRoomContent(roomId6, roomContent1);
+                        os.writeInt(2);
+                        os.writeUTF("ROOM_CONTENT_UPDATED");
+                        os.flush();
+                        break;
+                    case 17:
+                        int roomId7 = oi.readInt();
+                        String roomContent2 = oi.readUTF();
+                        saveRoomContent(roomId7, roomContent2);
+                        os.writeInt(2);
+                        os.writeUTF("ROOM_CONTENT_SAVED");
+                        os.flush();
+                        break;
                     default:
                         String s = oi.readUTF();
                         System.out.println(socket);
@@ -149,6 +200,65 @@ public class TaskClientConnection implements Runnable{
         }
 
         server.onlineClients.remove(clientDetails.getUsername());
+    }
+
+    private void saveRoomContent(int roomId7, String roomContent2) throws SQLException {
+        PreparedStatement stmt = conn.c.prepareStatement("UPDATE room SET `file_content`=? WHERE `room_id`=?");
+        stmt.setString(1, roomContent2);
+        stmt.setInt(2, roomId7);
+        stmt.executeUpdate();
+        updateRoomContent(roomId7, roomContent2);
+    }
+
+    private void updateRoomContent(int roomId6, String roomContent1) {
+        server.roomContentHashMap.put(roomId6, roomContent1);
+
+        server.roomDetailsMap.get(roomId6).forEach((userId, roomUser) -> {
+            if(clientDetails.getUserId() != userId){
+//                System.out.println("To Update: " + userId);
+                try{
+                    ObjectOutputStream os = new ObjectOutputStream(server.onlineClients.get(roomUser.getUsername()).getSocket().getOutputStream());
+                    os.writeInt(8);
+                    os.writeInt(clientDetails.getUserId());
+                    os.writeUTF(roomContent1);
+                    os.flush();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+    }
+
+    private String getRoomContent(int roomId4) throws SQLException {
+        PreparedStatement stmt = conn.c.prepareStatement("SELECT `file_content` FROM room WHERE room.room_id=?");
+        stmt.setInt(1, roomId4);
+        ResultSet rs = stmt.executeQuery();
+        if(rs.next()){
+            return rs.getString("file_content");
+        }
+        return "";
+    }
+
+    private void updateCaretPosition(int roomId3, int caretPosition) {
+        RoomUser roomUser = server.roomDetailsMap.get(roomId3).get(clientDetails.getUserId());
+        roomUser.setCaretPosition(caretPosition);
+        server.roomDetailsMap.get(roomId3).put(clientDetails.getUserId(), roomUser);
+
+        server.roomDetailsMap.get(roomId3).forEach((userId, roomUser1) -> {
+//            System.out.println(userId + " -> " + caretPosition);
+            if(clientDetails.getUserId() != userId){
+                try{
+                    ObjectOutputStream os = new ObjectOutputStream(server.onlineClients.get(roomUser1.getUsername()).getSocket().getOutputStream());
+                    os.writeInt(6);
+                    os.writeInt(clientDetails.getUserId());
+                    os.writeInt(caretPosition);
+                    os.flush();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+        });
     }
 
     private void updateUserAccess(int roomId2, ArrayList<UserAccessInfo> userAccessInfoArrayList1) {
@@ -196,27 +306,29 @@ public class TaskClientConnection implements Runnable{
     }
 
     private boolean sendMessageInRoom(int chatRoomId, String roomMessage) {
-        try{
-            PreparedStatement stmt = conn.c.prepareStatement("SELECT user.user_name AS `user_name` FROM user INNER JOIN room_details ON user.user_id=room_details.user_id WHERE room_details.room_id=?");
-            stmt.setInt(1, chatRoomId);
-
-            ResultSet rs = stmt.executeQuery();
-
-            while(rs.next()){
-                String receiverUsername = rs.getString("user_name");
+        //            PreparedStatement stmt = conn.c.prepareStatement("SELECT user.user_name AS `user_name` FROM user INNER JOIN room_details ON user.user_id=room_details.user_id WHERE room_details.room_id=?");
+//            stmt.setInt(1, chatRoomId);
+//
+//            ResultSet rs = stmt.executeQuery();
+        if(server.roomDetailsMap.containsKey(chatRoomId)){
+            server.roomDetailsMap.get(chatRoomId).forEach((userId, roomUser)->{
+                String receiverUsername = roomUser.getUsername();
 //                System.out.println(receiverUsername);
-                if(receiverUsername.equals(clientDetails.getUsername())) continue;
-                if(server.onlineClients.containsKey(receiverUsername)){
-                    ClientDetails roomSendToClient = server.onlineClients.get(receiverUsername);
-                    ObjectOutputStream sendToOO = new ObjectOutputStream(roomSendToClient.getSocket().getOutputStream());
-                    sendToOO.writeInt(3);
-                    sendToOO.writeUTF("[" + clientDetails.getUsername() + "]: " + roomMessage + "");
-                    sendToOO.flush();
+                if(!receiverUsername.equals(clientDetails.getUsername())){
+                    if(server.onlineClients.containsKey(receiverUsername)){
+                        try{
+                            ClientDetails roomSendToClient = server.onlineClients.get(receiverUsername);
+                            ObjectOutputStream sendToOO = new ObjectOutputStream(roomSendToClient.getSocket().getOutputStream());
+                            sendToOO.writeInt(3);
+                            sendToOO.writeUTF("[" + clientDetails.getUsername() + "]: " + roomMessage + "");
+                            sendToOO.flush();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
                 }
-            }
+            });
             return true;
-        } catch (SQLException | IOException throwables) {
-            throwables.printStackTrace();
         }
         return false;
     }
