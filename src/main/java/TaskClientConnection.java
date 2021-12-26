@@ -80,6 +80,7 @@ public class TaskClientConnection implements Runnable{
                         break;
                     case 7:
                         ArrayList<DocumentDetails> documentsList = getAllDocuments();
+                        os.writeInt(1);
                         os.writeObject(documentsList);
                         os.flush();
                         break;
@@ -210,19 +211,22 @@ public class TaskClientConnection implements Runnable{
                         os.writeInt(3);
                         os.writeUTF("IMAGE_SENT");
                         os.flush();
-                        os.writeInt(1);
-                        os.writeObject(serializableImage);
-                        os.flush();
+//                        os.writeInt(1);
+//                        os.writeObject(serializableImage);
+//                        os.flush();
                         break;
                     case 20:
                         String senderUsername = oi.readUTF();
                         String receiverUsername1 = oi.readUTF();
                         ObjectOutputStream receiverOutputStream1 = new ObjectOutputStream(server.onlineClients.get(receiverUsername1).getSocket().getOutputStream());
+                        System.out.println(senderUsername);
+                        System.out.println(receiverUsername1);
                         receiverOutputStream1.writeInt(10);
                         receiverOutputStream1.writeUTF(senderUsername);
                         receiverOutputStream1.flush();
                         os.writeBoolean(true);
                         os.flush();
+                        break;
                     case 21:
                         os.writeInt(1000);
                         os.flush();
