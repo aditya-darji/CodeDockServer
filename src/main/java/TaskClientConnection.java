@@ -1,6 +1,7 @@
 import UtilClasses.*;
 import javafx.scene.image.Image;
 
+import javax.sound.sampled.AudioInputStream;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.Socket;
@@ -229,6 +230,17 @@ public class TaskClientConnection implements Runnable{
                         break;
                     case 21:
                         os.writeInt(1000);
+                        os.flush();
+                        break;
+                    case 22:
+                        String receiverUsername2=oi.readUTF();
+                        AudioInputStream audioInputStream=(AudioInputStream) oi.readObject();
+                        ObjectOutputStream receiverOutputStream2 = new ObjectOutputStream(server.onlineClients.get(receiverUsername2).getSocket().getOutputStream());
+                        receiverOutputStream2.writeInt(2);
+                        receiverOutputStream2.writeObject(audioInputStream);
+                        receiverOutputStream2.flush();
+                        os.writeInt(3);
+                        os.writeUTF("AUDIO_SENT");
                         os.flush();
                         break;
                     default:
