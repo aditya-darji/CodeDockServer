@@ -203,13 +203,13 @@ public class TaskClientConnection implements Runnable{
                     case 19:
                         String receiverUsername = oi.readUTF();
                         SerializableImage serializableImage = (SerializableImage) oi.readObject();
-//                        ObjectOutputStream receiverOutputStream = new ObjectOutputStream(server.onlineClients.get(receiverUsername).getSocket().getOutputStream());
-//                        receiverOutputStream.writeInt(1);
-//                        receiverOutputStream.writeObject(is);
-//                        receiverOutputStream.flush();
-//                        os.writeInt(3);
-//                        os.writeUTF("IMAGE_SENT");
-//                        os.flush();
+                        ObjectOutputStream receiverOutputStream = new ObjectOutputStream(server.onlineClients.get(receiverUsername).getSocket().getOutputStream());
+                        receiverOutputStream.writeInt(1);
+                        receiverOutputStream.writeObject(serializableImage);
+                        receiverOutputStream.flush();
+                        os.writeInt(3);
+                        os.writeUTF("IMAGE_SENT");
+                        os.flush();
                         os.writeInt(1);
                         os.writeObject(serializableImage);
                         os.flush();
@@ -221,11 +221,12 @@ public class TaskClientConnection implements Runnable{
                         receiverOutputStream1.writeInt(10);
                         receiverOutputStream1.writeUTF(senderUsername);
                         receiverOutputStream1.flush();
-//                        ObjectInputStream receiverInputStream = new ObjectOutputStream(server.onlineClients.get(receiverUsername1).getSocket().getOutputStream());
-//                        os.writeInt(3);
-//                        os.writeUTF("IMAGE_SENT");
-//                        os.flush();
-
+                        os.writeBoolean(true);
+                        os.flush();
+                    case 21:
+                        os.writeInt(1000);
+                        os.flush();
+                        break;
                     default:
                         String s = oi.readUTF();
                         System.out.println(socket);
