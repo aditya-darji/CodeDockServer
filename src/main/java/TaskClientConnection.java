@@ -1,5 +1,7 @@
 import UtilClasses.*;
+import javafx.scene.image.Image;
 
+import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.Socket;
 import java.sql.*;
@@ -198,6 +200,32 @@ public class TaskClientConnection implements Runnable{
                         os.writeUTF(outputData);
                         os.flush();
                         break;
+                    case 19:
+                        String receiverUsername = oi.readUTF();
+                        SerializableImage serializableImage = (SerializableImage) oi.readObject();
+//                        ObjectOutputStream receiverOutputStream = new ObjectOutputStream(server.onlineClients.get(receiverUsername).getSocket().getOutputStream());
+//                        receiverOutputStream.writeInt(1);
+//                        receiverOutputStream.writeObject(is);
+//                        receiverOutputStream.flush();
+//                        os.writeInt(3);
+//                        os.writeUTF("IMAGE_SENT");
+//                        os.flush();
+                        os.writeInt(1);
+                        os.writeObject(serializableImage);
+                        os.flush();
+                        break;
+                    case 20:
+                        String senderUsername = oi.readUTF();
+                        String receiverUsername1 = oi.readUTF();
+                        ObjectOutputStream receiverOutputStream1 = new ObjectOutputStream(server.onlineClients.get(receiverUsername1).getSocket().getOutputStream());
+                        receiverOutputStream1.writeInt(10);
+                        receiverOutputStream1.writeUTF(senderUsername);
+                        receiverOutputStream1.flush();
+//                        ObjectInputStream receiverInputStream = new ObjectOutputStream(server.onlineClients.get(receiverUsername1).getSocket().getOutputStream());
+//                        os.writeInt(3);
+//                        os.writeUTF("IMAGE_SENT");
+//                        os.flush();
+
                     default:
                         String s = oi.readUTF();
                         System.out.println(socket);
