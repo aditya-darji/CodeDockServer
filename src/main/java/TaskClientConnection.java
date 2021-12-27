@@ -229,6 +229,7 @@ public class TaskClientConnection implements Runnable{
                         os.flush();
                         break;
                     case 21:
+                    case 24:
                         os.writeInt(1000);
                         os.flush();
                         break;
@@ -256,7 +257,10 @@ public class TaskClientConnection implements Runnable{
                         break;
                 }
 
-            } catch (IOException | ClassNotFoundException | SQLException | InterruptedException e) { e.printStackTrace();}
+            } catch (IOException | ClassNotFoundException | SQLException | InterruptedException e) {
+                e.printStackTrace();
+                break;
+            }
         }
 
         server.onlineClients.remove(clientDetails.getUsername());
