@@ -259,6 +259,7 @@ public class TaskClientConnection implements Runnable{
 
             } catch (IOException | ClassNotFoundException | SQLException | InterruptedException e) {
                 e.printStackTrace();
+                System.out.println("USER_DISCONNECTED");
                 break;
             }
         }
