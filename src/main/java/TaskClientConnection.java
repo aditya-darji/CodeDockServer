@@ -205,26 +205,26 @@ public class TaskClientConnection implements Runnable{
                     case 19:
                         String receiverUsername = oi.readUTF();
                         SerializableImage serializableImage = (SerializableImage) oi.readObject();
-                        ObjectOutputStream receiverOutputStream = new ObjectOutputStream(server.onlineClients.get(receiverUsername).getSocket().getOutputStream());
-                        receiverOutputStream.writeInt(1);
-                        receiverOutputStream.writeObject(serializableImage);
-                        receiverOutputStream.flush();
-                        os.writeInt(3);
-                        os.writeUTF("IMAGE_SENT");
-                        os.flush();
-//                        os.writeInt(1);
-//                        os.writeObject(serializableImage);
+//                        ObjectOutputStream receiverOutputStream = new ObjectOutputStream(server.onlineClients.get(receiverUsername).getSocket().getOutputStream());
+//                        receiverOutputStream.writeInt(1);
+//                        receiverOutputStream.writeObject(serializableImage);
+//                        receiverOutputStream.flush();
+//                        os.writeInt(3);
+//                        os.writeUTF("IMAGE_SENT");
 //                        os.flush();
+                        os.writeInt(1);
+                        os.writeObject(serializableImage);
+                        os.flush();
                         break;
                     case 20:
                         String senderUsername = oi.readUTF();
                         String receiverUsername1 = oi.readUTF();
-                        ObjectOutputStream receiverOutputStream1 = new ObjectOutputStream(server.onlineClients.get(receiverUsername1).getSocket().getOutputStream());
-                        System.out.println(senderUsername);
-                        System.out.println(receiverUsername1);
-                        receiverOutputStream1.writeInt(10);
-                        receiverOutputStream1.writeUTF(senderUsername);
-                        receiverOutputStream1.flush();
+//                        ObjectOutputStream receiverOutputStream1 = new ObjectOutputStream(server.onlineClients.get(receiverUsername1).getSocket().getOutputStream());
+//                        System.out.println(senderUsername);
+//                        System.out.println(receiverUsername1);
+//                        receiverOutputStream1.writeInt(10);
+//                        receiverOutputStream1.writeUTF(senderUsername);
+//                        receiverOutputStream1.flush();
                         os.writeBoolean(true);
                         os.flush();
                         break;
@@ -241,6 +241,12 @@ public class TaskClientConnection implements Runnable{
                         receiverOutputStream2.flush();
                         os.writeInt(3);
                         os.writeUTF("AUDIO_SENT");
+                        os.flush();
+                        break;
+                    case 23:
+                        server.onlineClients.remove(clientDetails.getUsername());
+                        os.writeInt(2);
+                        os.writeUTF("USER_LOGOUT");
                         os.flush();
                         break;
                     default:
